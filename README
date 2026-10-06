@@ -1,6 +1,12 @@
-# Installation
+#Installation
 1. Clone the repo
 2. cd into the repo
 3. `python -m venv .venv`
 4. `source .venv/bin/activate`
 5. `pip install -r requirements.txt`
+
+#Usage
+>Both users must be connected to the same network
+1. User 1 runs `python main.py --serve`
+2. User 2 runs `python main.py --join <User 1's local IP address>`
+3. Profit
