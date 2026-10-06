@@ -1,85 +1,88 @@
+from pathlib import Path
 import socket
 import argparse
 import struct
 import threading
+import json
+import rsa
 
 ADDR = "0.0.0.0"
 PORT = 65535
 FIXED_MSG_SZ = 4
 
+PEER_PUBLIC = None
+
 def recv_fixed(conn, size):
-    buf = b""
-    while len(buf) < size:
-        chunk = conn.recv(size-len(buf))
-        if not chunk:
-            raise ConnectionError("Connection closed before all data was received")
-        buf += chunk
-    return buf
+	buf = b""
+	while len(buf) < size:
+		chunk = conn.recv(size-len(buf))
+		if not chunk:
+			raise ConnectionError("Connection closed before all data was received")
+		buf += chunk
+	return buf
 
 def receive_thread(conn, stop_event):
-    try:
-        while not stop_event.is_set():
-            data = recv_fixed(conn, FIXED_MSG_SZ)
-            (size,) = struct.unpack("!I", data)
-            data = recv_fixed(conn, size)
-            print(f"\nPeer: {data.decode("utf-8")}\nYou: ", end="")
-    except Exception:
-        pass
-    finally:
-        print("Connection closed")
-        stop_event.set()
+	global PEER_PUBLIC
+	try:
+		data = recv_fixed(conn, FIXED_MSG_SZ)
+		(size,) = struct.unpack("!I", data)
+		PEER_PUBLIC = json.loads(recv_fixed(conn, size).decode("utf-8"))
+
+		while not stop_event.is_set():
+			data = recv_fixed(conn, FIXED_MSG_SZ)
+			(size,) = struct.unpack("!I", data)
+			message = recv_fixed(conn, size).decode("utf-8")
+			print(f"\nPeer: {rsa.decrypt(message)}\nYou: ", end="")
+	except Exception as e:
+		print(e)
+	finally:
+		print("Connection closed")
+		stop_event.set()
 
 def chat(conn):
-    stop_event = threading.Event()
-    t = threading.Thread(target=receive_thread, args=(conn, stop_event), daemon=True)
-    t.start()
+	global PEER_PUBLIC
 
-    try:
-        while not stop_event.is_set():
-            message = input("You: ")
-            if stop_event.is_set():
-                break
-            data = message.encode("utf-8")
-            conn.sendall(struct.pack("!I", len(data)))
-            conn.sendall(data)
-    except Exception:
-        pass
-    finally:
-        stop_event.set()
-        try:
-            conn.shutdown(socket.SHUT_RDRW)
-        except Exception:
-            pass
-        conn.close()
+	stop_event = threading.Event()
+	t = threading.Thread(target=receive_thread, args=(conn, stop_event), daemon=True)
+	t.start()
+
+	try:
+		with open(Path("~/.lanchatty/rsa/public.key").expanduser(), "r") as f:
+			public = f.read().encode("utf-8")
+			conn.sendall(struct.pack("!I", len(public)))
+			conn.sendall(public)
+		
+		while not PEER_PUBLIC:
+			pass
+
+		while not stop_event.is_set():
+			message = input("You: ")
+			message = rsa.encrypt(message, PEER_PUBLIC)
+			if stop_event.is_set():
+				break
+			data = message.encode("utf-8")
+			conn.sendall(struct.pack("!I", len(data)))
+			conn.sendall(data)
+	except Exception as e:
+		print(e)
+	finally:
+		stop_event.set()
+		try:
+			conn.shutdown(socket.SHUT_RDWR)
+		except Exception as e:
+			print(e)
+		conn.close()
 
 def serve(s):
-    s.bind((ADDR, PORT))
-    s.listen()
-    print("Waiting for connection...")
+	s.bind((ADDR, PORT))
+	s.listen()
+	print("Waiting for connection...")
 
-    conn, addr = s.accept()
-    print(f"Connected with {addr}")
-    chat(conn)
+	conn, addr = s.accept()
+	print(f"Connected with {addr}")
+	chat(conn)
 
 def join(s, host, port):
-    s.connect((host, port))
-    chat(s)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--serve", action="store_true")
-    parser.add_argument("--join", action="store_true")
-    parser.add_argument("--ip")
-    args = parser.parse_args()
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    if args.serve:
-        serve(s)
-    if args.join:
-        if not args.ip:
-            print("No ip address provided. Aborting.")
-        else:
-            join(s, args.ip, PORT)
+	s.connect((host, port))
+	chat(s)
 
