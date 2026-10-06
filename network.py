@@ -51,5 +51,5 @@ if __name__ == "__main__":
     if args.serve:
         serve(s)
     if args.join:
-        join(s, "127.0.0.1", PORT):wq
+        join(s, "127.0.0.1", PORT)
 
