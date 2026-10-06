@@ -1,7 +1,7 @@
 import socket
 import argparse
 import struct
-
+import threading
 
 ADDR = "0.0.0.0"
 PORT = 65535
@@ -16,27 +16,54 @@ def recv_fixed(conn, size):
         buf += chunk
     return buf
 
+def receive_thread(conn, stop_event):
+    try:
+        while not stop_event.is_set():
+            data = recv_fixed(conn, FIXED_MSG_SZ)
+            (size,) = struct.unpack("!I", data)
+            data = recv_fixed(conn, size)
+            print(f"\nPeer: {data.decode("utf-8")}\nYou: ", end="")
+    except Exception:
+        pass
+    finally:
+        print("Connection closed")
+        stop_event.set()
+
+def chat(conn):
+    stop_event = threading.Event()
+    t = threading.Thread(target=receive_thread, args=(conn, stop_event), daemon=True)
+    t.start()
+
+    try:
+        while not stop_event.is_set():
+            message = input("You: ")
+            if stop_event.is_set():
+                break
+            data = message.encode("utf-8")
+            conn.sendall(struct.pack("!I", len(data)))
+            conn.sendall(data)
+    except Exception:
+        pass
+    finally:
+        stop_event.set()
+        try:
+            conn.shutdown(socket.SHUT_RDRW)
+        except Exception:
+            pass
+        conn.close()
+
 def serve(s):
     s.bind((ADDR, PORT))
     s.listen()
+    print("Waiting for connection...")
+
     conn, addr = s.accept()
-    with conn:
-        try:
-            while 1:
-                data = recv_fixed(conn, FIXED_MSG_SZ)
-                (size,) = struct.unpack("!I", data)
-                data = recv_fixed(conn, size)
-                print(data.decode("utf-8"))
-        except ConnectionError:
-            print("Disconnected")
+    print(f"Connected with {addr}")
+    chat(conn)
 
 def join(s, host, port):
     s.connect((host, port))
-    while 1:
-        message = input("You: ")
-        data = message.encode("utf-8")
-        s.sendall(struct.pack("!I", len(data)))
-        s.sendall(data)
+    chat(s)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -51,5 +78,8 @@ if __name__ == "__main__":
     if args.serve:
         serve(s)
     if args.join:
-        join(s, "127.0.0.1", PORT)
+        if not args.ip:
+            print("No ip address provided. Aborting.")
+        else:
+            join(s, args.ip, PORT)
 
