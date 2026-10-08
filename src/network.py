@@ -1,5 +1,8 @@
 from pathlib import Path
 from plyer import notification
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+from pygame import mixer
 import socket
 import argparse
 import struct
@@ -29,13 +32,19 @@ def receive_thread(conn, stop_event):
 		(size,) = struct.unpack("!I", data)
 		PEER_PUBLIC = json.loads(recv_fixed(conn, size).decode("utf-8"))
 
+		mixer.init()
+		sound = mixer.Sound("./assets/sounds/huh.wav")
+
 		while not stop_event.is_set():
 			data = recv_fixed(conn, FIXED_MSG_SZ)
 			(size,) = struct.unpack("!I", data)
+			
 			message = recv_fixed(conn, size).decode("utf-8")
 			plaintext = rsa.decrypt(message)
+			
 			print(f"\nPeer: {plaintext}\nYou: ", end="")
 			notification.notify(title="lanchatty", message=plaintext, timeout=5)
+			sound.play()
 	except Exception as e:
 		print(e)
 	finally:
