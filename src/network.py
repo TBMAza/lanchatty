@@ -1,4 +1,5 @@
 from pathlib import Path
+from plyer import notification
 import socket
 import argparse
 import struct
@@ -32,7 +33,9 @@ def receive_thread(conn, stop_event):
 			data = recv_fixed(conn, FIXED_MSG_SZ)
 			(size,) = struct.unpack("!I", data)
 			message = recv_fixed(conn, size).decode("utf-8")
-			print(f"\nPeer: {rsa.decrypt(message)}\nYou: ", end="")
+			plaintext = rsa.decrypt(message)
+			print(f"\nPeer: {plaintext}\nYou: ", end="")
+			notification.notify(title="lanchatty", message=plaintext, timeout=5)
 	except Exception as e:
 		print(e)
 	finally:
