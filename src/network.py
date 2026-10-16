@@ -1,20 +1,11 @@
-from pathlib import Path
-from plyer import notification
 import os
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
-from pygame import mixer
-import socket
-import argparse
-import struct
-import threading
 import json
+import struct
+from pathlib import Path
+
 import rsa
 
-ADDR = "0.0.0.0"
-PORT = 65535
-FIXED_MSG_SZ = 4
-
-PEER_PUBLIC = None
+from myglobals import ADDR, PORT, RSA_PATH, FIXED_MSG_SZ, PEER_PUBLIC_KEY
 
 def recv_fixed(conn, size):
 	buf = b""
@@ -25,76 +16,54 @@ def recv_fixed(conn, size):
 		buf += chunk
 	return buf
 
-def receive_thread(conn, stop_event):
-	global PEER_PUBLIC
-	try:
-		data = recv_fixed(conn, FIXED_MSG_SZ)
-		(size,) = struct.unpack("!I", data)
-		PEER_PUBLIC = json.loads(recv_fixed(conn, size).decode("utf-8"))
+def send(conn, message: str, peer_public_key: dict = None):
+	cipher = rsa.encrypt(message, peer_public_key).encode("utf-8") if peer_public_key else message.encode("utf-8")
+	conn.sendall(struct.pack("!I", len(cipher)))
+	conn.sendall(cipher)
 
-		mixer.init()
-		sound = mixer.Sound("./assets/sounds/huh.wav")
-
-		while not stop_event.is_set():
-			data = recv_fixed(conn, FIXED_MSG_SZ)
-			(size,) = struct.unpack("!I", data)
-			
-			message = recv_fixed(conn, size).decode("utf-8")
-			plaintext = rsa.decrypt(message)
-			
-			print(f"\nPeer: {plaintext}\nYou: ", end="")
-			notification.notify(title="lanchatty", message=plaintext, timeout=5)
-			sound.play()
-	except Exception as e:
-		print(e)
-	finally:
-		print("Connection closed")
-		stop_event.set()
-
-def chat(conn):
-	global PEER_PUBLIC
-
-	stop_event = threading.Event()
-	t = threading.Thread(target=receive_thread, args=(conn, stop_event), daemon=True)
-	t.start()
-
-	try:
-		with open(Path("~/.lanchatty/rsa/public.key").expanduser(), "r") as f:
-			public = f.read().encode("utf-8")
-			conn.sendall(struct.pack("!I", len(public)))
-			conn.sendall(public)
-		
-		while not PEER_PUBLIC:
-			pass
-
-		while not stop_event.is_set():
-			message = input("You: ")
-			message = rsa.encrypt(message, PEER_PUBLIC)
-			if stop_event.is_set():
-				break
-			data = message.encode("utf-8")
-			conn.sendall(struct.pack("!I", len(data)))
-			conn.sendall(data)
-	except Exception as e:
-		print(e)
-	finally:
-		stop_event.set()
-		try:
-			conn.shutdown(socket.SHUT_RDWR)
-		except Exception as e:
-			print(e)
-		conn.close()
+def recv(conn, encrypted: bool = True) -> str:
+	data = recv_fixed(conn, FIXED_MSG_SZ)
+	(size,) = struct.unpack("!I", data)
+	cipher = recv_fixed(conn, size).decode("utf-8")
+	message = rsa.decrypt(cipher) if encrypted else cipher
+	
+	return message
 
 def serve(s):
+	global PEER_PUBLIC_KEY
+
 	s.bind((ADDR, PORT))
 	s.listen()
-	print("Waiting for connection...")
+	print("waiting for connection...")
 
-	conn, addr = s.accept()
-	print(f"Connected with {addr}")
-	chat(conn)
+	conn, peer_addr = s.accept()
+	with open(Path(f"{RSA_PATH}/public.key").expanduser(), "r") as f:
+		my_public_key = f.read()
+	send(conn, message=my_public_key)
+	PEER_PUBLIC_KEY = json.loads(recv(conn, encrypted=False))
+	
+	print(f"connected with {peer_addr[0]}")
 
-def join(s, host, port):
+	return conn
+
+def join(s, host: str, port: int):
+	global PEER_PUBLIC_KEY
+
+	print("connecting...")
 	s.connect((host, port))
-	chat(s)
+	PEER_PUBLIC_KEY = json.loads(recv(s, encrypted=False))
+	with open(Path(f"{RSA_PATH}/public.key").expanduser(), "r") as f:
+		my_public_key = f.read()
+	send(s, my_public_key)
 
+	print(f"connected with {host}")
+
+	return s
+
+def recv_thread(stop, conn, messages_q):
+	try:
+		while not stop.is_set():
+			message = recv(conn)
+			messages_q.put(message)
+	finally:
+		stop.set()

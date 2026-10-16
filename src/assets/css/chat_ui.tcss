@@ -1,0 +1,51 @@
+#container {
+    height: 100%;
+    width: 100%;
+    layout: grid;
+    grid-size: 8 8;
+}
+
+#messages {
+    row-span: 7;
+    column-span: 8;
+}
+
+#text {
+    row-span: 1;
+    column-span: 7;
+}
+
+#send {
+    row-span: 1;
+    column-span: 1;
+    height: 100%;
+    width: 100%;
+}
+
+.peer {
+    width: 100%;
+    height: auto;
+}
+.me {
+    width: 100%;
+    height: auto;
+    align: right middle;
+}
+
+.peermsg {
+    background: gainsboro;
+    color: black;
+    width: auto;
+    max-width: 40%;
+    padding: 1;
+    margin: 1;
+}
+
+.memsg {
+    background: gray;
+    color: black;
+    width: auto;
+    max-width: 40%;
+    padding: 1;
+    margin: 1;
+}
