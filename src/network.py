@@ -63,7 +63,13 @@ def join(s, host: str, port: int):
 def recv_thread(stop, conn, messages_q):
 	try:
 		while not stop.is_set():
-			message = recv(conn)
-			messages_q.put(message)
+			payload = ("message", recv(conn))
+			messages_q.put(payload)
+	except ConnectionError:
+		if not stop.is_set():
+			payload = ("disconnected", "connection closed by peer")
+			messages_q.put(payload)
+	except Exception:
+		pass
 	finally:
 		stop.set()

@@ -26,10 +26,16 @@
     width: 100%;
     height: auto;
 }
+
 .me {
     width: 100%;
     height: auto;
     align: right middle;
+}
+
+.disconnected {
+    width: 100%;
+    height: auto;
 }
 
 .peermsg {
@@ -46,6 +52,15 @@
     color: black;
     width: auto;
     max-width: 40%;
+    padding: 1;
+    margin: 1;
+}
+
+.disconnectedmsg {
+    background: red;
+    color: white;
+    text-align: center;
+    width: 100%;
     padding: 1;
     margin: 1;
 }

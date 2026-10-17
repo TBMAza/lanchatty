@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
 	if conn:
 		# receive thread
-		rt = threading.Thread(target=network.recv_thread, args=(stop, conn, messages_q), daemon=True)
+		rt = threading.Thread(target=network.recv_thread, args=(stop, conn, messages_q))
 		rt.start()
 
 		# chat UI
@@ -43,3 +43,4 @@ if __name__ == "__main__":
 		chat_ui.run()
 		
 		stop.set()
+		conn.close()

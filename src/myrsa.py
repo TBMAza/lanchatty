@@ -50,4 +50,3 @@ def decrypt(c):
 	cipher = [int(c[i:i+width], 16) for i in range(0, len(c), width)]
 	plain = [pow(i, d, n) for i in cipher]
 	return "".join([chr(i) for i in plain])
-
