@@ -1,4 +1,9 @@
+import os
 import queue
+from plyer import notification
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+from pygame import mixer
+
 from textual import work
 from textual.app import App, ComposeResult
 from textual.worker import get_current_worker
@@ -14,6 +19,7 @@ class ChatUI(App):
     def __init__(self, conn, **kwargs):
         super().__init__(**kwargs)
         self.conn = conn
+        self.sound = None
 
     def compose(self) -> ComposeResult:
         yield Container(
@@ -39,6 +45,8 @@ class ChatUI(App):
     
     def on_mount(self) -> None:
         self.get_from_queue()
+        mixer.init()
+        self.sound = mixer.Sound("./assets/sounds/huh.wav")
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "send":
@@ -49,6 +57,12 @@ class ChatUI(App):
     
     def on_incoming_message(self, message: str) -> None:
         self.new_msg(message, "peer")
+        notification.notify(
+            title="lanchatty",
+            message=message,
+            timeout=5
+        )
+        self.sound.play()
     
     @work(thread=True)
     def get_from_queue(self) -> None:
@@ -59,7 +73,3 @@ class ChatUI(App):
             except queue.Empty:
                 continue
             self.call_from_thread(self.on_incoming_message, message)
-
-if __name__ == "__main__":
-    chat_ui = ChatUI()
-    chat_ui.run()
