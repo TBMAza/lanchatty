@@ -15,11 +15,16 @@ from myglobals import messages_q
 
 class ChatUI(App):
 	CSS_PATH = "./assets/css/chat_ui.tcss"
+	BINDINGS = [
+		("ctrl+s", "send", "send message"),
+		("ctrl+n", "toggle_notifications", "toggle notifications")
+	]
 
 	def __init__(self, conn, **kwargs):
 		super().__init__(**kwargs)
 		self.conn = conn
 		self.sound = None
+		self.notifications = True
 
 	def compose(self) -> ComposeResult:
 		yield Container(
@@ -47,28 +52,40 @@ class ChatUI(App):
 		self.get_from_queue()
 		mixer.init()
 	
+	def send_mymsg(self):
+		textarea = self.query_one("#text")
+		self.new_msg(textarea.text, "me")
+		network.send(self.conn, textarea.text, network.PEER_PUBLIC_KEY)
+		textarea.clear()
+	
 	def on_button_pressed(self, event: Button.Pressed) -> None:
 		if event.button.id == "send":
-			textarea = self.query_one("#text")
-			self.new_msg(textarea.text, "me")
-			network.send(self.conn, textarea.text, network.PEER_PUBLIC_KEY)
-			textarea.clear()
+			self.send_mymsg()
+	
+	def action_send(self):
+		self.send_mymsg()
 	
 	def on_incoming_message(self, message: str) -> None:
 		self.new_msg(message, "peer")
-		notification.notify(
-			title="lanchatty",
-			message=message,
-			timeout=5
-		)
-		self.sound = mixer.Sound("./assets/sounds/huh.mp3")
-		self.sound.play()
+		if self.notifications:
+			notification.notify(
+				title="lanchatty",
+				message=message,
+				timeout=5
+			)
+			self.sound = mixer.Sound("./assets/sounds/huh.mp3")
+			self.sound.play()
 	
 	def on_disconnected(self, message, event) -> None:
 		self.new_msg(message, event)
-		self.notify(message, title=event, severity="error")
-		self.sound = mixer.Sound("./assets/sounds/boom.mp3")
-		self.sound.play()
+		if self.notifications:
+			self.notify(message, title=event, severity="error")
+			self.sound = mixer.Sound("./assets/sounds/boom.mp3")
+			self.sound.play()
+	
+	def action_toggle_notifications(self):
+		self.notifications = not self.notifications
+		self.notify(f"notifications {"enabled" if self.notifications is True else "disabled"}")
 	
 	@work(thread=True)
 	def get_from_queue(self) -> None:
