@@ -3,7 +3,7 @@ import json
 import struct
 from pathlib import Path
 
-import rsa
+import myrsa
 
 from myglobals import ADDR, PORT, RSA_PATH, FIXED_MSG_SZ, PEER_PUBLIC_KEY
 
@@ -17,7 +17,7 @@ def recv_fixed(conn, size):
 	return buf
 
 def send(conn, message: str, peer_public_key: dict = None):
-	cipher = rsa.encrypt(message, peer_public_key).encode("utf-8") if peer_public_key else message.encode("utf-8")
+	cipher = myrsa.encrypt(message, peer_public_key).encode("utf-8") if peer_public_key else message.encode("utf-8")
 	conn.sendall(struct.pack("!I", len(cipher)))
 	conn.sendall(cipher)
 
@@ -25,7 +25,7 @@ def recv(conn, encrypted: bool = True) -> str:
 	data = recv_fixed(conn, FIXED_MSG_SZ)
 	(size,) = struct.unpack("!I", data)
 	cipher = recv_fixed(conn, size).decode("utf-8")
-	message = rsa.decrypt(cipher) if encrypted else cipher
+	message = myrsa.decrypt(cipher) if encrypted else cipher
 	
 	return message
 

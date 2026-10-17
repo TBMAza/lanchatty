@@ -2,9 +2,9 @@ import socket
 import argparse
 import threading
 
-from chat_ui import ChatUI
-
+import myrsa
 import network
+from chat_ui import ChatUI
 from myglobals import PORT, messages_q, stop
 
 
@@ -15,6 +15,8 @@ if __name__ == "__main__":
 	parser.add_argument("--join", action="store_true")
 	parser.add_argument("--ip")
 	args = parser.parse_args()
+
+	myrsa.keygen()
 
 	# connect
 	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
